@@ -1,0 +1,80 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Backend Deployment
+#
+# Runs the NestJS API.
+# Image is pulled from GitHub Container Registry.
+# Secrets (MongoDB URI, JWT) are provided via a Kubernetes Secret object.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  replicas: 2                # Adjust based on load; GKE Autopilot scales automatically
+  selector:
+    matchLabels:
+      app: backend
+  strategy:
+    type: RollingUpdate      # Zero-downtime deploys
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      # Pull image from private registry using a Kubernetes image pull secret
+      # Create with: kubectl create secret docker-registry ghcr-secret ...
+      imagePullSecrets:
+        - name: ghcr-secret
+
+      containers:
+        - name: backend
+          image: ghcr.io/Refaeltz/server/backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3000"
+            # Reference secrets stored in a Kubernetes Secret (see secrets.yaml)
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MONGODB_URI
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: JWT_SECRET
+
+          # ── Resource limits ──────────────────────────────────────────────
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          # ── Health checks ────────────────────────────────────────────────
+          readinessProbe:
+            httpGet:
+              path: /api/health   # Implement a simple /api/health endpoint in NestJS
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30

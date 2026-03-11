@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Ingress
+#
+# Routes external HTTP(S) traffic into the cluster.
+# Requires an Ingress controller installed in the cluster, e.g.:
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/...
+#
+# TLS is terminated here using a certificate managed by cert-manager.
+# Install cert-manager:  https://cert-manager.io/docs/installation/
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  annotations:
+    # Use the NGINX ingress controller
+    kubernetes.io/ingress.class: "nginx"
+
+    # cert-manager will automatically provision a Let's Encrypt certificate
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+    # Increase body size limit for file uploads if needed
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+
+    # Enable CORS for API routes if your frontend is on a different origin
+    # nginx.ingress.kubernetes.io/enable-cors: "true"
+spec:
+  tls:
+    - hosts:
+        - your-domain.com
+      secretName: app-tls-secret   # cert-manager stores the certificate here
+
+  rules:
+    - host: your-domain.com
+      http:
+        paths:
+          # API route → backend service
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 3000
+
+          # Everything else → frontend service (React SPA)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

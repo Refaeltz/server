@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Service definitions
+#
+# ClusterIP services make pods reachable within the cluster by a stable DNS name.
+# The Ingress (ingress.yaml) is the only entry point from outside the cluster.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Backend service ────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+
+---
+
+# ── Frontend service ───────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

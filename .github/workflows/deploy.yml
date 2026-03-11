@@ -1,0 +1,160 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CI/CD Pipeline – Build → Push → Deploy
+#
+# Triggers on every push to main.
+#
+# Steps:
+#   1. Build Docker images for backend and frontend
+#   2. Push images to GitHub Container Registry (ghcr.io)
+#   3. SSH into the production server
+#   4. Pull the new images and restart containers with zero-downtime swap
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+# Prevent two deployments from running simultaneously
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false   # let an in-flight deploy finish rather than cancel
+
+env:
+  REGISTRY: ghcr.io
+  # github.repository resolves to "owner/repo"
+  BACKEND_IMAGE:  ghcr.io/${{ github.repository }}/backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository }}/frontend
+
+jobs:
+
+  # ── Job 1: Build and push images ──────────────────────────────────────────
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+
+    # Required to push to ghcr.io
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      # Pass the exact image tag (git SHA) to the deploy job
+      image-tag: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      # Log in to GitHub Container Registry using the auto-generated GITHUB_TOKEN
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Enable BuildKit layer caching and multi-platform builds
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Backend image ──────────────────────────────────────────────────────
+      - name: Extract backend image metadata
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file:    ./backend/Dockerfile
+          push:    true
+          tags:    ${{ steps.meta-backend.outputs.tags }}
+          labels:  ${{ steps.meta-backend.outputs.labels }}
+          # Cache layers from the previous build to speed things up
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+      # ── Frontend image ─────────────────────────────────────────────────────
+      - name: Extract frontend image metadata
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.FRONTEND_IMAGE }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file:    ./frontend/Dockerfile
+          push:    true
+          tags:    ${{ steps.meta-frontend.outputs.tags }}
+          labels:  ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+  # ── Job 2: Deploy to server ────────────────────────────────────────────────
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    # Protect the deployment with a GitHub Environment (optional but recommended)
+    # environment: production
+
+    steps:
+      - name: Checkout source (for docker-compose.yml)
+        uses: actions/checkout@v4
+
+      # Copy docker-compose.yml to the server so it is always up to date
+      - name: Copy compose file to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key:      ${{ secrets.SERVER_SSH_KEY }}
+          port:     ${{ secrets.SERVER_PORT || 22 }}
+          source:   docker-compose.yml
+          target:   ~/app
+
+      # SSH in, pull new images, and restart with minimal downtime
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key:      ${{ secrets.SERVER_SSH_KEY }}
+          port:     ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            set -e
+
+            cd ~/app
+
+            # Authenticate with GHCR so docker can pull the private images
+            echo "${{ secrets.GITHUB_TOKEN }}" | \
+              docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Export image names so docker-compose.yml picks them up via env vars
+            export FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }}:latest
+            export BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}:latest
+
+            # Pull freshly built images (fails fast if registry is unreachable)
+            docker compose pull
+
+            # Recreate changed containers; leave unchanged ones running
+            docker compose up -d --remove-orphans
+
+            # Clean up dangling images to reclaim disk space
+            docker image prune -f
+
+            echo "Deployment complete."

@@ -1,0 +1,133 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Docker Compose – production orchestration
+#
+# Services:
+#   nginx     – reverse proxy, only container exposed to the internet
+#   frontend  – React SPA served by a lightweight NGINX
+#   backend   – NestJS API
+#   mongo     – MongoDB database (internal only)
+#
+# Images for frontend and backend are pulled from GitHub Container Registry
+# (ghcr.io) by the CI/CD pipeline and referenced via environment variables so
+# the same compose file works locally (with local image names) and in production.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Reverse proxy ──────────────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      # Uncomment after enabling TLS:
+      # - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Certbot challenge files (needed for Let's Encrypt)
+      - certbot-webroot:/var/www/certbot:ro
+      # Let's Encrypt certificates (needed after first Certbot run)
+      - certbot-certs:/etc/letsencrypt:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - app-network
+    # Keep resource footprint small; NGINX is very efficient
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+
+  # ── React frontend ─────────────────────────────────────────────────────────
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/Refaeltz/server/frontend:latest}
+    restart: unless-stopped
+    # Not exposed directly – nginx proxies traffic to it
+    expose:
+      - "80"
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+
+  # ── NestJS backend ─────────────────────────────────────────────────────────
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/Refaeltz/server/backend:latest}
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      # Secrets should be stored in a .env file on the server (not committed to git).
+      # Reference: https://docs.docker.com/compose/environment-variables/
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/app}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 3000
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  # ── MongoDB ────────────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7-jammy
+    restart: unless-stopped
+    # Never expose MongoDB to the host; it is only reachable inside app-network
+    expose:
+      - "27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: app
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  # ── Certbot (one-shot, run manually to obtain/renew certificates) ──────────
+  # Usage:  docker compose run --rm certbot certonly ...
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - certbot-webroot:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+    # This service does nothing on `docker compose up`; invoke it manually.
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew; done"
+    networks:
+      - app-network
+
+# ── Named volumes ──────────────────────────────────────────────────────────
+volumes:
+  mongo-data:
+    driver: local
+  certbot-webroot:
+    driver: local
+  certbot-certs:
+    driver: local
+
+# ── Internal network (containers talk to each other by service name) ───────
+networks:
+  app-network:
+    driver: bridge
