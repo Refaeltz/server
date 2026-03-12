@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd D:/CodeProjects/server && cp .env.example .env && cat .env)",
+      "Bash(cd D:/CodeProjects/server && docker compose build 2>&1)",
+      "Bash(where docker:*)",
+      "Read(//mnt/c/Program Files/Docker/Docker/resources/bin/**)",
+      "Bash(powershell.exe -Command \"Get-Command oh-my-posh -ErrorAction SilentlyContinue\")",
+      "Bash(pwsh -NoProfile -Command \"Get-Command oh-my-posh -ErrorAction SilentlyContinue; Write-Host 'PROFILE:'; Write-Host \\\\$PROFILE; Write-Host 'EXISTS:'; Test-Path \\\\$PROFILE\")",
+      "Bash(pwsh -NoProfile -Command 'Get-Command oh-my-posh -ErrorAction SilentlyContinue; Write-Host $PROFILE; Test-Path $PROFILE')",
+      "Bash(powershell -NoProfile -Command 'Write-Host $PROFILE; Write-Host \\(Test-Path $PROFILE\\)')",
+      "Bash(powershell -NoProfile -Command 'Get-Command oh-my-posh -ErrorAction SilentlyContinue | Format-List')",
+      "Bash(powershell -NoProfile -Command 'winget install JanDeLaHaye.oh-my-posh --accept-package-agreements --accept-source-agreements')",
+      "Bash(powershell -NoProfile -Command 'winget search \"oh-my-posh\" 2>&1 | Select-String -Pattern \"oh-my-posh|ohmyposh\" -CaseSensitive:$false')",
+      "Bash(powershell -NoProfile -Command 'winget install JanDeDobbeleer.OhMyPosh --accept-package-agreements --accept-source-agreements 2>&1')",
+      "Bash(powershell -NoProfile -Command 'New-Item -Path \"C:\\\\Users\\\\Refael\\\\Documents\\\\WindowsPowerShell\" -ItemType Directory -Force | Out-Null; Write-Host \"done\"')"
+    ]
+  }
+}

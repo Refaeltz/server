@@ -42,7 +42,7 @@ services:
 
   # ── React frontend ─────────────────────────────────────────────────────────
   frontend:
-    image: ${FRONTEND_IMAGE:-ghcr.io/Refaeltz/server/frontend:latest}
+    image: ${FRONTEND_IMAGE:-ghcr.io/refaeltz/server/frontend:latest}
     restart: unless-stopped
     # Not exposed directly – nginx proxies traffic to it
     expose:
@@ -57,7 +57,7 @@ services:
 
   # ── NestJS backend ─────────────────────────────────────────────────────────
   backend:
-    image: ${BACKEND_IMAGE:-ghcr.io/Refaeltz/server/backend:latest}
+    image: ${BACKEND_IMAGE:-ghcr.io/refaeltz/server/backend:latest}
     restart: unless-stopped
     expose:
       - "3000"

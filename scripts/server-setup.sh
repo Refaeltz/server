@@ -138,8 +138,8 @@ MONGODB_URI=mongodb://admin:CHANGE_ME_STRONG_PASSWORD@mongo:27017/app?authSource
 JWT_SECRET=CHANGE_ME_JWT_SECRET
 
 # Docker image references (updated automatically by CI/CD)
-FRONTEND_IMAGE=ghcr.io/Refaeltz/server/frontend:latest
-BACKEND_IMAGE=ghcr.io/Refaeltz/server/backend:latest
+FRONTEND_IMAGE=ghcr.io/refaeltz/server/frontend:latest
+BACKEND_IMAGE=ghcr.io/refaeltz/server/backend:latest
 EOF
   chown "${DEPLOY_USER}:${DEPLOY_USER}" "${ENV_FILE}"
   chmod 600 "${ENV_FILE}"

@@ -33,7 +33,7 @@ spec:
 
       containers:
         - name: backend
-          image: ghcr.io/Refaeltz/server/backend:latest
+          image: ghcr.io/refaeltz/server/backend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
