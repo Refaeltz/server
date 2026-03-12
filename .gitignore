@@ -1,0 +1,18 @@
+# Environment secrets — never commit
+.env
+
+# Node
+node_modules/
+dist/
+
+# Build outputs
+frontend/dist/
+backend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

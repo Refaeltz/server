@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Local development overrides
+#
+# Docker Compose automatically merges this file with docker-compose.yml.
+# It is NOT used in production — CI only copies docker-compose.yml to the server.
+#
+# Differences from production:
+#   • Images are built from local source instead of pulled from GHCR
+#   • NODE_ENV is set to development (enables Swagger)
+#   • MongoDB port is exposed locally so you can inspect it with Compass
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: development
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+  mongo:
+    # Expose MongoDB to localhost for local inspection (e.g. MongoDB Compass)
+    # Remove this in any environment facing the internet.
+    ports:
+      - "27017:27017"
